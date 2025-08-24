@@ -10,6 +10,18 @@
     "dev": {
       "cache": false,
       "persistent": true
-    }
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "api:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "api:test": {
+      "outputs": ["coverage/**"]
+    },
+    "api:lint": {}
   }
 }
