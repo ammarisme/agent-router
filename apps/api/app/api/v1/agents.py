@@ -31,12 +31,31 @@ async def get_agent_service(db: AsyncSession = Depends(get_db)) -> AgentService:
 async def list_agents(
     skip: int = 0,
     limit: int = 100,
+    page: int = None,
+    size: int = None,
     agent_service: AgentService = Depends(get_agent_service),
 ) -> AgentListResponse:
+    """List all agents with pagination support for both skip/limit and page/size formats."""
+    # Support both pagination formats
+    if page is not None and size is not None:
+        skip = (page - 1) * size
+        limit = size
     """List all agents."""
     try:
         agents = await agent_service.list_agents(skip=skip, limit=limit)
-        return AgentListResponse(agents=agents, total=len(agents))
+        total = len(agents)  # In a real app, you'd get total count from DB
+        
+        # Calculate pagination info
+        current_page = (skip // limit) + 1 if limit > 0 else 1
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        
+        return AgentListResponse(
+            agents=agents, 
+            total=total,
+            page=current_page,
+            size=limit,
+            pages=total_pages
+        )
     except Exception as e:
         logger.error(f"Error listing agents: {e}")
         raise HTTPException(

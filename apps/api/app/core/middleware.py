@@ -48,20 +48,22 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 def setup_middleware(app):
     """Setup all middleware."""
-    # Trusted Host middleware
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.allowed_hosts
-    )
-    
-    # CORS middleware
+    # CORS middleware (must be first)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=["*"] if settings.debug else settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         allow_headers=["*"],
+        expose_headers=["X-Correlation-ID"],
     )
+    
+    # Trusted Host middleware (disabled for development)
+    if settings.is_production:
+        app.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=settings.allowed_hosts
+        )
     
     # Security headers middleware
     app.add_middleware(SecurityHeadersMiddleware)

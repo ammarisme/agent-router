@@ -30,8 +30,15 @@ async def get_route_service(db: AsyncSession = Depends(get_db)) -> RouteService:
 async def list_routes(
     skip: int = 0,
     limit: int = 100,
+    page: int = None,
+    size: int = None,
     route_service: RouteService = Depends(get_route_service),
 ) -> RouteListResponse:
+    """List all routes with pagination support for both skip/limit and page/size formats."""
+    # Support both pagination formats
+    if page is not None and size is not None:
+        skip = (page - 1) * size
+        limit = size
     """List all routes."""
     try:
         routes = await route_service.list_routes(skip=skip, limit=limit)

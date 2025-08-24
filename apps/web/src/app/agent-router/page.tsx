@@ -1,16 +1,22 @@
 'use client'
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useApi } from "@/providers/ApiProvider";
+import type { Agent, Feature, Route, Role } from "@/lib/api";
 
 // ---------- Types ----------
-interface Agent {
-  id: string;
-  name: string;
-}
-
-interface Feature {
-  id: string;
-  name: string;
+interface Connection {
+  agentId: string;
+  featureId: string;
+  agentName: string;
+  featureName: string;
+  style: string;
+  rules: {
+    allowAll: boolean;
+    allowed: string[];
+    disallowed: string[];
+  };
+  conditional?: boolean;
 }
 
 interface Connection {
@@ -526,17 +532,7 @@ function RoutesTable({ routes, onEdit, onRemove }: {
 
 // ---------- Main Component ----------
 export default function AgentRoutingTool() {
-  const [agents, setAgents] = useState<Agent[]>([
-    { id: uid(), name: "Agent 1" },
-    { id: uid(), name: "Agent 2" },
-    { id: uid(), name: "Agent 3" },
-  ]);
-  const [features, setFeatures] = useState<Feature[]>([
-    { id: uid(), name: "Feature 1" },
-    { id: uid(), name: "Feature 2" },
-    { id: uid(), name: "Feature 3" },
-    { id: uid(), name: "Feature 4" },
-  ]);
+  const { agents, features, loading, error, fetchAgents, fetchFeatures, createAgent, createFeature, importIAMRoles } = useApi();
 
   const initialConnectionRef = useRef(true);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -558,8 +554,15 @@ export default function AgentRoutingTool() {
   const [showIAMRolesImport, setShowIAMRolesImport] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
+  // Load data on component mount
   useEffect(() => {
-    if (initialConnectionRef.current && agents[0] && features[1]) {
+    fetchAgents();
+    fetchFeatures();
+  }, [fetchAgents, fetchFeatures]);
+
+  // Create initial connection when data is loaded
+  useEffect(() => {
+    if (initialConnectionRef.current && agents?.length > 0 && features?.length > 1) {
       initialConnectionRef.current = false;
       setConnections([
         {
@@ -593,7 +596,7 @@ export default function AgentRoutingTool() {
   // Drag from Feature → drop on Agent (basic route)
   function handleAgentDrop(a: Agent) {
     if (!draggingFeatureId) return;
-    const f = features.find((x) => x.id === draggingFeatureId);
+    const f = features?.find((x) => x.id === draggingFeatureId);
     if (!f) return;
 
     setConnections((prev) => {
@@ -624,7 +627,7 @@ export default function AgentRoutingTool() {
     const r = lanesRef.current?.getBoundingClientRect();
     if (!r) return { left: 0, top: 0, width: 0, height: 0 };
     return { left: r.left, top: r.top, width: r.width, height: r.height };
-  }, [lanesRef.current, agents.length, features.length]);
+  }, [lanesRef.current, agents?.length || 0, features?.length || 0]);
 
   // Anchors: Feature right center → Agent left center (requested)
   function featureAnchorRight(id: string): Point {
@@ -701,7 +704,7 @@ export default function AgentRoutingTool() {
       
       // Create connections for all selected agents
       condDraft.agentIds.forEach(agentId => {
-        const a = agents.find((x) => x.id === agentId);
+        const a = agents?.find((x) => x.id === agentId);
         if (!a) return;
         
         const idx = prev.findIndex((c) => c.agentId === a.id && c.featureId === f.id);
@@ -755,7 +758,7 @@ export default function AgentRoutingTool() {
 
   // Reorder features: conditional route features first, then others
   const orderedFeatures = useMemo(() => {
-    if (!hasConditionalRoutes) return features;
+    if (!hasConditionalRoutes || !features) return features || [];
     
     const conditionalFeatureIds = Object.keys(conditionalRoutesByFeature);
     const conditionalFeatures = features.filter(f => conditionalFeatureIds.includes(f.id));
@@ -769,6 +772,43 @@ export default function AgentRoutingTool() {
       {flash && (
         <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-900/30 p-3 text-sm text-emerald-200">
           {flash}
+        </div>
+      )}
+
+      {/* Loading States */}
+      {(loading.agents || loading.features) && (
+        <div className="mb-4 rounded-lg border border-blue-600/40 bg-blue-900/30 p-4">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+            <span className="text-blue-200">Loading data...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Error States */}
+      {(error.agents || error.features) && (
+        <div className="mb-4 rounded-lg border border-red-600/40 bg-red-900/30 p-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <h4 className="text-red-200 font-medium mb-1">Error loading data</h4>
+              <div className="text-red-300 text-sm space-y-1">
+                {error.agents && <div>Agents: {error.agents}</div>}
+                {error.features && <div>Features: {error.features}</div>}
+              </div>
+              <button 
+                className="mt-2 px-3 py-1 rounded border border-red-600 hover:bg-red-800 text-sm"
+                onClick={() => {
+                  if (error.agents) fetchAgents();
+                  if (error.features) fetchFeatures();
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -843,7 +883,7 @@ export default function AgentRoutingTool() {
           
           {/* Conditional connections - feature to conditional box, then conditional box to agents */}
           {hasConditionalRoutes && Object.entries(conditionalRoutesByFeature).map(([featureId, routes]) => {
-            const feature = features.find(f => f.id === featureId);
+            const feature = features?.find(f => f.id === featureId);
             if (!feature) return null;
             
             // Calculate conditional box position (middle of the conditional routes lane)
@@ -903,7 +943,7 @@ export default function AgentRoutingTool() {
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
             <LaneHeader
               title="Features"
-              count={features.length}
+              count={features?.length || 0}
               right={
                 <button
                   className="px-3 py-2 rounded-lg border border-indigo-500 bg-indigo-600 hover:bg-indigo-500"
@@ -914,7 +954,7 @@ export default function AgentRoutingTool() {
               }
             />
             <div className="space-y-2">
-              {orderedFeatures.map((f) => (
+              {orderedFeatures?.map((f) => (
                 <div key={f.id} ref={(el) => { if (el) featureRefs.current.set(f.id, el); else featureRefs.current.delete(f.id); }}>
                   <Pill
                     active={draggingFeatureId === f.id || selectedFeatureId === f.id}
@@ -966,7 +1006,7 @@ export default function AgentRoutingTool() {
           <section className={`rounded-2xl border ${condMode === "pick-agents" ? "border-green-500 ring-2 ring-green-500/40" : "border-zinc-800"} bg-zinc-900/40 p-4`}>
             <LaneHeader
               title="Agents"
-              count={agents.length}
+              count={agents?.length || 0}
               right={
                 <button
                   className="px-3 py-2 rounded-lg border border-indigo-500 bg-indigo-600 hover:bg-indigo-500"
@@ -977,7 +1017,7 @@ export default function AgentRoutingTool() {
               }
             />
             <div className="space-y-2">
-              {agents.map((a) => (
+              {agents?.map((a) => (
                 <div key={a.id} ref={(el) => { if (el) agentRefs.current.set(a.id, el); else agentRefs.current.delete(a.id); }}>
                   <Pill 
                     active={(condMode === "pick-agents" || condMode === "ready") && condDraft.agentIds.includes(a.id)}
@@ -1004,8 +1044,37 @@ export default function AgentRoutingTool() {
         </div>
       </div>
 
+      {/* Show loading state when no data is available */}
+      {!loading.agents && !loading.features && (agents?.length || 0) === 0 && (features?.length || 0) === 0 && (
+        <div className="text-center py-12">
+          <div className="text-zinc-400 mb-4">
+            <svg className="w-16 h-16 mx-auto mb-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 className="text-lg font-medium mb-2">No data available</h3>
+            <p className="text-sm">No agents or features found. Please add some data to get started.</p>
+          </div>
+          <div className="flex items-center justify-center gap-3">
+            <button 
+              className="px-4 py-2 rounded-lg border border-zinc-600 hover:bg-zinc-800 text-sm"
+              onClick={() => setShowAgentSources(true)}
+            >
+              Add Agents
+            </button>
+            <button 
+              className="px-4 py-2 rounded-lg border border-zinc-600 hover:bg-zinc-800 text-sm"
+              onClick={() => setShowFeatureStore(true)}
+            >
+              Add Features
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Full-width Routes table (below both lanes) */}
-      <RoutesTable routes={connections} onEdit={openEdit} onRemove={removeConnection} />
+      {connections.length > 0 && (
+        <RoutesTable routes={connections} onEdit={openEdit} onRemove={removeConnection} />
+      )}
 
       {/* Edit Modal for existing routes */}
       <Modal
@@ -1064,7 +1133,7 @@ export default function AgentRoutingTool() {
       {/* Conditional Route Modal (roles + Select Agent) */}
       <Modal
         open={condModalOpen}
-        title={`Add Conditional Route${selectedFeatureId ? `: ${features.find(f=>f.id===selectedFeatureId)?.name}` : ""}`}
+        title={`Add Conditional Route${selectedFeatureId ? `: ${features?.find(f=>f.id===selectedFeatureId)?.name}` : ""}`}
         onClose={() => { setCondModalOpen(false); setCondMode("idle"); }}
         footer={(
           <div className="flex items-center justify-end gap-2 pt-2">
@@ -1081,23 +1150,49 @@ export default function AgentRoutingTool() {
         />
       </Modal>
 
-      {/* Source connection modals (no-op save; just closes & flashes) */}
+      {/* Source connection modals with real API integration */}
       <AgentSourcesModal
         open={showAgentSources}
         onClose={() => setShowAgentSources(false)}
-        onSave={(payload: { type: string; name: string; endpoint: string; apiKey: string }) => {
-          setShowAgentSources(false);
-          setFlash(`${payload.type} "${payload.name}" connected. Agents would load automatically (not implemented).`);
-          setTimeout(() => setFlash(null), 3500);
+        onSave={async (payload: { type: string; name: string; endpoint: string; apiKey: string }) => {
+          try {
+            await createAgent({
+              name: payload.name,
+              description: `Agent from ${payload.type}`,
+              source_type: payload.type as 'MCP' | 'A2A' | 'WORKFLOW',
+              endpoint: payload.endpoint,
+              api_key: payload.apiKey,
+              config_data: {}
+            });
+            setShowAgentSources(false);
+            setFlash(`Agent "${payload.name}" created successfully!`);
+            setTimeout(() => setFlash(null), 3500);
+          } catch (error) {
+            setFlash(`Failed to create agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setTimeout(() => setFlash(null), 5000);
+          }
         }}
       />
       <FeatureStoreModal
         open={showFeatureStore}
         onClose={() => setShowFeatureStore(false)}
-        onSave={(payload: { provider: string; name: string; url: string; token: string }) => {
-          setShowFeatureStore(false);
-          setFlash(`Feature store "${payload.name}" connected. Features would load automatically (not implemented).`);
-          setTimeout(() => setFlash(null), 3500);
+        onSave={async (payload: { provider: string; name: string; url: string; token: string }) => {
+          try {
+            await createFeature({
+              name: payload.name,
+              description: `Feature from ${payload.provider}`,
+              store_type: payload.provider as 'HTTP_JSON' | 'GIT' | 'S3' | 'GCS',
+              url: payload.url,
+              token: payload.token,
+              config_data: {}
+            });
+            setShowFeatureStore(false);
+            setFlash(`Feature "${payload.name}" created successfully!`);
+            setTimeout(() => setFlash(null), 3500);
+          } catch (error) {
+            setFlash(`Failed to create feature: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setTimeout(() => setFlash(null), 5000);
+          }
         }}
       />
       <IAMRolesImportModal

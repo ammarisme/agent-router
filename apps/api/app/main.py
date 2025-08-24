@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, ORJSONResponse
+from fastapi.responses import JSONResponse, ORJSONResponse, Response
 from fastapi_limiter import FastAPILimiter
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -80,6 +80,43 @@ Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 # Include API routes
 app.include_router(v1_router, prefix="/v1")
+
+
+@app.options("/{full_path:path}")
+async def options_handler(request: Request):
+    """Handle OPTIONS requests for CORS preflight."""
+    # Get the origin from the request headers
+    origin = request.headers.get("origin", "*")
+    
+    # Check if the origin is in our allowed origins
+    allowed_origins = settings.cors_origins
+    if origin in allowed_origins or "*" in allowed_origins:
+        allow_origin = origin
+    else:
+        allow_origin = allowed_origins[0] if allowed_origins else "*"
+    
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": allow_origin,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Correlation-ID",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "86400",
+        }
+    )
+
+
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint."""
+    return {"status": "healthy", "message": "API is running"}
+
+
+@app.get("/test-cors")
+async def test_cors():
+    """Test endpoint to verify CORS is working."""
+    return {"message": "CORS is working!", "timestamp": "2024-01-01T00:00:00Z"}
 
 
 @app.exception_handler(StarletteHTTPException)

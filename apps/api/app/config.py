@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Application
     app_name: str = Field("Agent Router API", description="Application name")
     version: str = Field("0.1.0", description="Application version")
-    debug: bool = Field(False, description="Debug mode")
+    debug: bool = Field(True, description="Debug mode")
     log_level: str = Field("INFO", description="Log level")
     enable_docs: bool = Field(True, description="Enable API documentation")
 
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: List[str] = Field(
-        ["http://localhost:3000", "http://localhost:3001"],
+        ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
         description="CORS allowed origins"
     )
 
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     security_headers: bool = Field(True, description="Enable security headers")
     security_headers_enabled: bool = Field(True, description="Enable security headers")
     trusted_hosts: List[str] = Field(["localhost", "127.0.0.1"], description="Trusted hosts")
-    allowed_hosts: List[str] = Field(["localhost", "127.0.0.1", "*"], description="Allowed hosts for TrustedHostMiddleware")
+    allowed_hosts: List[str] = Field(["localhost", "127.0.0.1", "0.0.0.0", "*"], description="Allowed hosts for TrustedHostMiddleware")
     csp_default_src: str = Field("'self'", description="Content Security Policy default source")
     hsts_max_age: int = Field(31536000, description="HSTS max age in seconds (1 year)")
 

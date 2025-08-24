@@ -30,8 +30,15 @@ async def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
 async def list_roles(
     skip: int = 0,
     limit: int = 100,
+    page: int = None,
+    size: int = None,
     role_service: RoleService = Depends(get_role_service),
 ) -> RoleListResponse:
+    """List all roles with pagination support for both skip/limit and page/size formats."""
+    # Support both pagination formats
+    if page is not None and size is not None:
+        skip = (page - 1) * size
+        limit = size
     """List all roles."""
     try:
         roles = await role_service.list_roles(skip=skip, limit=limit)

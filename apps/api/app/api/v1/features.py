@@ -30,12 +30,31 @@ async def get_feature_service(db: AsyncSession = Depends(get_db)) -> FeatureServ
 async def list_features(
     skip: int = 0,
     limit: int = 100,
+    page: int = None,
+    size: int = None,
     feature_service: FeatureService = Depends(get_feature_service),
 ) -> FeatureListResponse:
+    """List all features with pagination support for both skip/limit and page/size formats."""
+    # Support both pagination formats
+    if page is not None and size is not None:
+        skip = (page - 1) * size
+        limit = size
     """List all features."""
     try:
         features = await feature_service.list_features(skip=skip, limit=limit)
-        return FeatureListResponse(features=features, total=len(features))
+        total = len(features)  # In a real app, you'd get total count from DB
+        
+        # Calculate pagination info
+        current_page = (skip // limit) + 1 if limit > 0 else 1
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        
+        return FeatureListResponse(
+            features=features, 
+            total=total,
+            page=current_page,
+            size=limit,
+            pages=total_pages
+        )
     except Exception as e:
         logger.error(f"Error listing features: {e}")
         raise HTTPException(
