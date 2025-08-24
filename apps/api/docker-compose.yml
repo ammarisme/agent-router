@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DB_DSN=sqlite+aiosqlite:///./data/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=dev-secret-key-change-in-production
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
+      - ALLOWED_HOSTS=["localhost", "127.0.0.1"]
+      - LOG_LEVEL=DEBUG
+      - RATE_LIMIT=100/minute
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # Optional: OTEL Collector for local development
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+    restart: unless-stopped
+
+volumes:
+  redis_data:

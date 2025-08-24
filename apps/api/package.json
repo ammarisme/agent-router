@@ -1,0 +1,22 @@
+{
+  "name": "@agent-router/api",
+  "version": "0.1.0",
+  "description": "FastAPI backend for Agent Router",
+  "private": true,
+  "scripts": {
+    "dev": "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "start": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "test": "pytest -v",
+    "test:cov": "pytest --cov=app --cov-report=html",
+    "lint": "ruff check .",
+    "format": "ruff format .",
+    "type-check": "mypy app",
+    "security": "bandit -r app/ && pip-audit",
+    "migrate": "alembic upgrade head",
+    "migrate:create": "alembic revision --autogenerate -m",
+    "docker:build": "docker build -t agent-router-api:local .",
+    "docker:run": "docker run --rm -p 8000:8000 -v $(pwd)/data:/app/data --env-file .env agent-router-api:local"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
